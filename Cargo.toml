@@ -1,0 +1,7 @@
+[package]
+name = "two-sided-vec"
+version = "0.1.0"
+authors = ["Techcable <Techcable@techcable.net>"]
+
+[dependencies]
+serde = { version = "^1.0.27", optional = true }
