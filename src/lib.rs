@@ -15,8 +15,50 @@ use std::ops::{Index, Range, RangeFull, RangeFrom, RangeTo, IndexMut};
 use std::hash::{Hash, Hasher};
 
 pub mod raw;
+#[cfg(feature = "serde")]
+mod serialize;
 
 use self::raw::{RawTwoSidedVec, Capacity, CapacityRequest};
+
+/// Internal macro used to count the number of expressions passed to the `two_sided_vec!` macro.
+#[macro_export]
+#[doc(hidden)]
+macro_rules! count_exprs {
+    () => (0);
+    ($one:expr) => (1);
+    ($first:expr, $($value:expr),*) => (count_exprs!($($value),*) + 1)
+}
+/// Creates a `TwoSidedVec` from the specified elements.
+///
+/// ## Examples
+/// ````
+/// # #[macro_use] extern crate two_sided_vec;
+/// # fn main() {
+/// let example = two_sided_vec![1, 2, 3; 4, 5, 6];
+/// assert_eq!(example.back(), &[1, 2, 3]);
+/// assert_eq!(example.front(), &[4, 5, 6]);
+/// let example = two_sided_vec![4, 5, 6];
+/// assert_eq!(example.back(), &[]);
+/// assert_eq!(example.front(), &[4, 5, 6]);
+/// # }
+/// ````
+#[macro_export]
+macro_rules! two_sided_vec {
+    () => (TwoSidedVec::new());
+    ($($element:expr),*) => (two_sided_vec![; $($element),*]);
+    ($($back:expr),*; $($front:expr),*) =>  {{
+        let mut result = $crate::TwoSidedVec::with_capacity(
+            count_exprs!($($back),*),
+            count_exprs!($($front),*)
+        );
+        $(result.push_back($back);)*
+        if !result.back().is_empty() {
+            result.back_mut().reverse();
+        }
+        $(result.push_front($front);)*
+        result
+    }}
+}
 
 /// A simple 'two sided' vector, that can grow both forwards and backwards.
 ///
@@ -564,11 +606,6 @@ impl<T, I: Iterator<Item=T>> Iterator for SignedEnumerate<I> {
     type Item = (isize, T);
 
     #[inline]
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        self.handle.size_hint()
-    }
-
-    #[inline]
     fn next(&mut self) -> Option<Self::Item> {
         if let Some(value) = self.handle.next() {
             let index = self.index;
@@ -577,6 +614,11 @@ impl<T, I: Iterator<Item=T>> Iterator for SignedEnumerate<I> {
         } else {
             None
         }
+    }
+
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.handle.size_hint()
     }
 }
 impl<I> iter::DoubleEndedIterator for SignedEnumerate<I>

@@ -5,3 +5,6 @@ authors = ["Techcable <Techcable@techcable.net>"]
 
 [dependencies]
 serde = { version = "^1.0.27", optional = true }
+
+[dev-dependencies]
+serde_test = { version = "^1" }

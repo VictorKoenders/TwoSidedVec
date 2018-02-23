@@ -1,7 +1,11 @@
+#[macro_use]
 extern crate two_sided_vec;
+extern crate serde;
+extern crate serde_test;
 
 use std::fmt::Debug;
 
+use serde_test::{Token};
 use two_sided_vec::TwoSidedVec;
 
 #[test]
@@ -61,6 +65,31 @@ fn test_pop() {
     assert_eq!(result.len_front(), expected_front.len());
     assert!(result.is_empty());
 }
+#[test]
+fn test_serde() {
+    let values = two_sided_vec![1, 2, 3; 7, 8, 9, 10];
+    ::serde_test::assert_tokens(&values, &[
+        Token::Struct {
+            name: "TwoSidedVec",
+            len: 2
+        },
+        Token::Str("back"),
+        Token::Seq { len: Some(3) },
+        Token::I32(3),
+        Token::I32(2),
+        Token::I32(1),
+        Token::SeqEnd,
+        Token::Str("front"),
+        Token::Seq { len: Some(4) },
+        Token::I32(7),
+        Token::I32(8),
+        Token::I32(9),
+        Token::I32(10),
+        Token::SeqEnd,
+        Token::StructEnd
+    ])
+}
+
 fn assert_expected<T: Debug + Eq + Clone>(
     target: &TwoSidedVec<T>,
     mut expected_back: Vec<T>,
