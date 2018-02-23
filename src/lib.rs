@@ -5,6 +5,7 @@
     pointer_methods, // These are just plain useful ;)
     trusted_len, // Trusted length iterators improve performance
     fused, // Likewise fused iterators can also improve performance
+    specialization, // Used to improve extend performance
 )]
 #[cfg(feature = "serde")]
 extern crate serde;
@@ -15,9 +16,15 @@ use std::ops::{Index, Range, RangeFull, RangeFrom, RangeTo, IndexMut};
 use std::hash::{Hash, Hasher};
 
 pub mod raw;
+mod extend;
 #[cfg(feature = "serde")]
 mod serialize;
+/// The prelude of traits and objects which are generally useful.
+pub mod prelude {
+    pub use super::{TwoSidedExtend, TwoSidedVec};
+}
 
+pub use self::extend::TwoSidedExtend;
 use self::raw::{RawTwoSidedVec, Capacity, CapacityRequest};
 
 /// Internal macro used to count the number of expressions passed to the `two_sided_vec!` macro.
@@ -178,19 +185,34 @@ impl<T> TwoSidedVec<T> {
             self.start_index -= 1;
         }
     }
-    pub fn extend_back<I>(&mut self, values: I) where I: IntoIterator<Item=T> {
-        let iter = values.into_iter();
+    fn default_extend_back<I: Iterator<Item=T>>(&mut self, iter: I) {
         if let Some(hint) = iter.size_hint().1 { self.reserve_back(hint) };
         for value in iter {
             self.push_back(value);
         }
     }
-    pub fn extend_front<I>(&mut self, values: I) where I: IntoIterator<Item=T> {
-        let iter = values.into_iter();
+    fn default_extend_front<I: Iterator<Item=T>>(&mut self, iter: I) {
         if let Some(hint) = iter.size_hint().1 { self.reserve_front(hint) };
         for value in iter {
             self.push_front(value);
         }
+    }
+    unsafe fn raw_extend_back(&mut self, mut target: *const T, len: usize) {
+        self.reserve_back(len);
+        let target_end = target.add(len);
+        let mut start_ptr = self.start_ptr();
+        while target < target_end {
+            start_ptr = start_ptr.sub(1);
+            start_ptr.copy_from_nonoverlapping(target, 1);
+            target = target.add(1);
+        }
+        self.start_index -= len as isize;
+        debug_assert_eq!(self.start_ptr(), start_ptr);
+    }
+    unsafe fn raw_extend_front(&mut self, target: *const T, len: usize) {
+        self.reserve_front(len);
+        self.end_ptr().copy_from_nonoverlapping(target, len);
+        self.end_index += len as isize;
     }
     #[inline]
     pub fn reserve_back(&mut self, amount: usize) {

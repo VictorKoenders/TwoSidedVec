@@ -6,7 +6,7 @@ extern crate serde_test;
 use std::fmt::Debug;
 
 use serde_test::{Token};
-use two_sided_vec::TwoSidedVec;
+use two_sided_vec::{TwoSidedVec, TwoSidedExtend};
 
 #[test]
 fn test_push_front() {
@@ -88,6 +88,61 @@ fn test_serde() {
         Token::SeqEnd,
         Token::StructEnd
     ])
+}
+#[test]
+fn test_extend_ref_slice() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back(&[3, 2, 1]);
+    result.extend_front(&[4, 5, 6]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6])
+}
+
+#[test]
+fn test_extend_ref_trusted_len() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back([3, 2, 1].iter().map(|i| i));
+    result.extend_front([4, 5, 6].iter().map(|i| i));
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6])
+}
+
+#[test]
+fn test_extend_ref_default() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back([3, 2, 1].iter().map(|i| i).filter(|i| **i < 32));
+    result.extend_front([4, 5, 6].iter().map(|i| i).filter(|i| **i < 32));
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6])
+}
+
+
+#[test]
+fn text_extend_vec() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back(vec![3, 2, 1]);
+    result.extend_front(vec![4, 5, 6]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6]);
+}
+
+#[test]
+fn text_extend_trusted_len() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back(vec![3, 2, 1].into_iter().map(|i| i));
+    result.extend_front(vec![4, 5, 6].into_iter().map(|i| i));
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6])
+}
+
+
+#[test]
+fn text_extend_default() {
+    let mut result = TwoSidedVec::<u32>::new();
+    result.extend_back(vec![3, 2, 1].into_iter().filter(|i| *i < 32));
+    result.extend_front(vec![4, 5, 6].into_iter().filter(|i| *i < 32));
+    assert_eq!(result.back(), &[1, 2, 3]);
+    assert_eq!(result.front(), &[4, 5, 6])
 }
 
 fn assert_expected<T: Debug + Eq + Clone>(
