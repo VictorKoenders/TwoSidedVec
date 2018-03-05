@@ -402,6 +402,23 @@ impl<T> TwoSidedVec<T> {
     pub fn enumerate_mut(&mut self) -> SignedEnumerate<slice::IterMut<T>> {
         SignedEnumerate::new(self.start(), self[..].iter_mut())
     }
+    pub fn truncate_back(&mut self, len: usize) {
+        // Not as optimized as `truncate_front` because I'm lazy ;)
+        while self.len_back() > len {
+            drop(self.pop_back().unwrap())
+        }
+    }
+    pub fn truncate_front(&mut self, len: usize) {
+        unsafe {
+            // drop any extra elements
+            while self.len_front() > len {
+                // decrement len before the drop_in_place(), so a panic on Drop
+                // doesn't re-drop the just-failed value.
+                self.end_index -= 1;
+                ptr::drop_in_place(self.middle_ptr().offset(self.end_index));
+            }
+        }
+    }
 }
 impl<T: Clone> Clone for TwoSidedVec<T> {
     fn clone(&self) -> Self {

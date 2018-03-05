@@ -145,6 +145,46 @@ fn text_extend_default() {
     assert_eq!(result.front(), &[4, 5, 6])
 }
 
+#[test]
+fn truncate_front() {
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_front(2);
+    assert_eq!(result.front(), &[4, 5]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_front(1);
+    assert_eq!(result.front(), &[4]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_front(0);
+    assert_eq!(result.front(), &[]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_front(20);
+    assert_eq!(result.front(), &[4, 5, 6, 7]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+}
+
+#[test]
+fn truncate_back() {
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_back(2);
+    assert_eq!(result.front(), &[4, 5, 6, 7]);
+    assert_eq!(result.back(), &[2, 3]);
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_back(1);
+    assert_eq!(result.front(), &[4, 5, 6, 7]);
+    assert_eq!(result.back(), &[3]);
+    let mut result = two_sided_vec![2, 3; 4, 5, 6, 7];
+    result.truncate_back(0);
+    assert_eq!(result.front(), &[4, 5, 6, 7]);
+    assert_eq!(result.back(), &[]);
+    let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
+    result.truncate_back(20);
+    assert_eq!(result.front(), &[4, 5, 6, 7]);
+    assert_eq!(result.back(), &[1, 2, 3]);
+}
+
 fn assert_expected<T: Debug + Eq + Clone>(
     target: &TwoSidedVec<T>,
     mut expected_back: Vec<T>,
