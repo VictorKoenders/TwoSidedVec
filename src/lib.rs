@@ -419,6 +419,33 @@ impl<T> TwoSidedVec<T> {
             }
         }
     }
+    pub fn retain<F: FnMut(isize, &mut T) -> bool>(&mut self, mut pred: F) {
+        self.retain_back(|index, element| pred(index, element));
+        self.retain_front(|index, element| pred(index, element));
+    }
+    pub fn retain_back<F: FnMut(isize, &mut T) -> bool>(&mut self, mut pred: F) {
+        self.drain_filter_back(|index, element| !pred(index, element));
+    }
+    pub fn retain_front<F: FnMut(isize, &mut T) -> bool>(&mut self, mut pred: F) {
+        self.drain_filter_front(|index, element| !pred(index, element));
+    }
+    pub fn drain_filter_back<F: FnMut(isize, &mut T) -> bool>(&mut self, pred: F) -> DrainFilterBack<T, F> {
+        let old_len = self.len_back();
+        self.back_mut().reverse();
+        // Guard against us getting leaked (leak amplification)
+        self.start_index = 0;
+        DrainFilterBack {
+            old_len, index: 0, del: 0, vec: self, pred
+        }
+    }
+    pub fn drain_filter_front<F: FnMut(isize, &mut T) -> bool>(&mut self, pred: F) -> DrainFilterFront<T, F> {
+        let old_len = self.end_index as usize;
+        // Guard against us getting leaked (leak amplification)
+        self.end_index = 0;
+        DrainFilterFront {
+            old_len, index: 0, del: 0, vec: self, pred
+        }
+    }
 }
 impl<T: Clone> Clone for TwoSidedVec<T> {
     fn clone(&self) -> Self {
@@ -722,5 +749,113 @@ impl<T: Hash> Hash for TwoSidedVec<T> {
         state.write_isize(self.start());
         T::hash_slice(self.back(), state);
         T::hash_slice(self.front(), state);
+    }
+}
+
+pub struct DrainFilterBack<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> {
+    vec: &'a mut TwoSidedVec<T>,
+    index: usize,
+    del: usize,
+    old_len: usize,
+    pred: F
+}
+impl<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> Iterator for DrainFilterBack<'a, T, F> {
+    type Item = T;
+    fn next(&mut self) -> Option<T> {
+        // Because we reversed the memory this is almost the exact same as `DrainFilterFront`
+        unsafe {
+            while self.index != self.old_len {
+                let i = self.index;
+                self.index += 1;
+                let v = slice::from_raw_parts_mut(
+                    self.vec.middle_ptr().sub(self.old_len),
+                    self.old_len
+                );
+                let actual_index = -((i + 1) as isize);
+                if (self.pred)(actual_index, &mut v[i]) {
+                    self.del += 1;
+                    return Some(ptr::read(&v[i]));
+                } else if self.del > 0 {
+                    let del = self.del;
+                    let src: *const T = &v[i];
+                    let dst: *mut T = &mut v[i - del];
+                    // This is safe because self.vec has length 0
+                    // thus its elements will not have Drop::drop
+                    // called on them in the event of a panic.
+                    ptr::copy_nonoverlapping(src, dst, 1);
+                }
+            }
+            None
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.old_len - self.index))
+    }
+}
+
+impl<'a, T, F: FnMut(isize, &mut T) -> bool> Drop for DrainFilterBack<'a, T, F> {
+    fn drop(&mut self) {
+        for _ in self.by_ref() {}
+        let target_len = self.old_len - self.del;
+        unsafe {
+            ptr::copy_nonoverlapping(
+                self.vec.middle_ptr().sub(self.old_len),
+                self.vec.middle_ptr().sub(target_len),
+                target_len
+            );
+        }
+        debug_assert!(target_len <= isize::max_value() as usize);
+        self.vec.start_index = -(target_len as isize);
+        // Reverse the order so we're back to where we started
+        self.vec.back_mut().reverse();
+    }
+}
+
+
+
+pub struct DrainFilterFront<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> {
+    vec: &'a mut TwoSidedVec<T>,
+    index: usize,
+    del: usize,
+    old_len: usize,
+    pred: F
+}
+impl<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> Iterator for DrainFilterFront<'a, T, F> {
+    type Item = T;
+    #[inline]
+    fn next(&mut self) -> Option<T> {
+        unsafe {
+            while self.index != self.old_len {
+                let i = self.index;
+                self.index += 1;
+                let v = slice::from_raw_parts_mut(self.vec.middle_ptr(), self.old_len);
+                if (self.pred)(i as isize, &mut v[i]) {
+                    self.del += 1;
+                    return Some(ptr::read(&v[i]));
+                } else if self.del > 0 {
+                    let del = self.del;
+                    let src: *const T = &v[i];
+                    let dst: *mut T = &mut v[i - del];
+                    // This is safe because self.vec has length 0
+                    // thus its elements will not have Drop::drop
+                    // called on them in the event of a panic.
+                    ptr::copy_nonoverlapping(src, dst, 1);
+                }
+            }
+            None
+        }
+    }
+    #[inline]
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        (0, Some(self.old_len - self.index))
+    }
+}
+impl<'a, T, F: FnMut(isize, &mut T) -> bool> Drop for DrainFilterFront<'a, T, F> {
+    fn drop(&mut self) {
+        for _ in self.by_ref() {}
+        let target_len = (self.old_len - self.del) as isize;
+        assert!(target_len >= 0);
+        self.vec.end_index = target_len as isize;
     }
 }

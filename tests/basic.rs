@@ -27,6 +27,19 @@ fn test_push_back() {
     assert_expected(&result, expected, vec![]);
 }
 #[test]
+fn test_retain() {
+    let mut vec = two_sided_vec![8, 7, 16, 13; 1, 2, 3, 4];
+    vec.retain(|_, &mut x| x % 2 == 0);
+    assert_eq!(vec, two_sided_vec![8, 16; 2, 4]);
+}
+
+#[test]
+fn test_retain_text() {
+    let mut vec = two_sided_vec!["bob", "food", "text loves"; "fourteen", "why"];
+    vec.retain(|_, x| !x.contains("f") && !x.contains(" "));
+    assert_eq!(vec, two_sided_vec!["bob"; "why"]);
+}
+#[test]
 fn test_push() {
     let mut result = TwoSidedVec::new();
     let expected_back = expected_back();
