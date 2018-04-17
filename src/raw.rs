@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::{Add};
 use std::mem;
 
-use std::heap::{Alloc, Layout, Heap};
+use std::alloc::{Alloc, Layout, Global, Opaque};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
@@ -25,9 +25,9 @@ impl<T> RawTwoSidedVec<T> {
         if capacity.is_empty() {
             return RawTwoSidedVec::new()
         }
-        let mut heap = Heap::default();
+        let mut heap = Global::default();
         let raw = heap.alloc_array::<T>(capacity.checked_total())
-            .unwrap_or_else(|e| heap.oom(e));
+            .unwrap_or_else(|_| heap.oom());
         unsafe {
             let middle = raw.as_ptr().add(capacity.back);
             RawTwoSidedVec::from_raw_parts(middle, capacity)
@@ -59,12 +59,12 @@ impl<T> RawTwoSidedVec<T> {
          * we can attempt in-place reallocation first.
          * This avoids moving any memory unless we absolutely need to.
          */
-        let mut heap = Heap::default();
+        let mut heap = Global::default();
         if !self.capacity.is_empty() && self.capacity.back >= requested_capacity.back {
             match unsafe { heap.grow_in_place(
-                self.alloc_start() as *mut u8,
+                NonNull::new_unchecked(self.alloc_start() as *mut Opaque),
                 self.capacity.layout::<T>(),
-                requested_capacity.layout::<T>()
+                requested_capacity.layout::<T>().size()
             ) } {
                 Ok(()) => {
                     self.capacity = requested_capacity;
@@ -99,12 +99,12 @@ unsafe impl<#[may_dangle] T> Drop for RawTwoSidedVec<T> {
     #[inline]
     fn drop(&mut self) {
         if !self.capacity.is_empty() {
-            let mut heap = Heap::default();
+            let mut heap = Global::default();
             unsafe {
                 heap.dealloc_array(
                     NonNull::new_unchecked(self.alloc_start()),
                     self.capacity.total()
-                ).unwrap_or_else(|err| heap.oom(err))
+                ).unwrap_or_else(|_| heap.oom())
             }
         }
     }

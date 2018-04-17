@@ -1,6 +1,5 @@
 #![feature(
     dropck_eyepatch, // Needed to bypass dropchk
-    generic_param_attrs, // Needed to use `dropck_eyepatch`
     allocator_api, // We need to allocate raw memory
     pointer_methods, // These are just plain useful ;)
     trusted_len, // Trusted length iterators improve performance
