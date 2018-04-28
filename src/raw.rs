@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::{Add};
 use std::mem;
 
-use std::alloc::{Alloc, Layout, Global, Opaque};
+use std::alloc::{oom, Alloc, Layout, Global, Opaque};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
@@ -27,7 +27,7 @@ impl<T> RawTwoSidedVec<T> {
         }
         let mut heap = Global::default();
         let raw = heap.alloc_array::<T>(capacity.checked_total())
-            .unwrap_or_else(|_| heap.oom());
+            .unwrap_or_else(|_| oom());
         unsafe {
             let middle = raw.as_ptr().add(capacity.back);
             RawTwoSidedVec::from_raw_parts(middle, capacity)
@@ -104,7 +104,7 @@ unsafe impl<#[may_dangle] T> Drop for RawTwoSidedVec<T> {
                 heap.dealloc_array(
                     NonNull::new_unchecked(self.alloc_start()),
                     self.capacity.total()
-                ).unwrap_or_else(|_| heap.oom())
+                ).unwrap_or_else(|_| oom())
             }
         }
     }
