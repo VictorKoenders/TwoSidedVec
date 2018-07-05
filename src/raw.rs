@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::{Add};
 use std::mem;
 
-use std::alloc::{oom, Alloc, Layout, Global, Opaque};
+use std::alloc::{handle_alloc_error, Alloc, Global, Layout};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
@@ -26,10 +26,11 @@ impl<T> RawTwoSidedVec<T> {
             return RawTwoSidedVec::new()
         }
         let mut heap = Global::default();
-        let raw = heap.alloc_array::<T>(capacity.checked_total())
-            .unwrap_or_else(|_| oom());
+        let layout = capacity.layout::<T>();
         unsafe {
-            let middle = raw.as_ptr().add(capacity.back);
+            let raw = heap.alloc(layout)
+                .unwrap_or_else(|_| handle_alloc_error(layout));
+            let middle = (raw.as_ptr() as *mut T).add(capacity.back);
             RawTwoSidedVec::from_raw_parts(middle, capacity)
         }
     }
@@ -62,7 +63,7 @@ impl<T> RawTwoSidedVec<T> {
         let mut heap = Global::default();
         if !self.capacity.is_empty() && self.capacity.back >= requested_capacity.back {
             match unsafe { heap.grow_in_place(
-                NonNull::new_unchecked(self.alloc_start() as *mut Opaque),
+                NonNull::new_unchecked(self.alloc_start() as *mut u8),
                 self.capacity.layout::<T>(),
                 requested_capacity.layout::<T>().size()
             ) } {
@@ -101,10 +102,11 @@ unsafe impl<#[may_dangle] T> Drop for RawTwoSidedVec<T> {
         if !self.capacity.is_empty() {
             let mut heap = Global::default();
             unsafe {
-                heap.dealloc_array(
-                    NonNull::new_unchecked(self.alloc_start()),
-                    self.capacity.total()
-                ).unwrap_or_else(|_| oom())
+                let layout = self.capacity.layout::<T>();
+                heap.dealloc(
+                    NonNull::new_unchecked(self.alloc_start() as *mut u8),
+                    layout
+                );
             }
         }
     }
