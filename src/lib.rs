@@ -1,9 +1,8 @@
 #![feature(
     dropck_eyepatch, // Needed to bypass dropchk
     allocator_api, // We need to allocate raw memory
-    pointer_methods, // These are just plain useful ;)
+    alloc_layout_extra, // We need to allocate memory
     trusted_len, // Trusted length iterators improve performance
-    fused, // Likewise fused iterators can also improve performance
     specialization, // Used to improve extend performance
 )]
 #[cfg(feature = "serde")]
