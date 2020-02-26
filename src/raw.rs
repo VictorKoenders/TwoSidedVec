@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::{Add};
 use std::mem;
 
-use std::alloc::{handle_alloc_error, Alloc, Global, Layout};
+use std::alloc::{handle_alloc_error, AllocRef, Global, Layout};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
