@@ -1,11 +1,12 @@
 [package]
 name = "two-sided-vec"
-version = "0.1.7"
+version = "0.1.8"
 authors = ["Techcable <Techcable@techcable.net>"]
 description = "Double ended vectors for rust, which can grow in both the front and back"
 repository = "https://github.com/DuckLogic/TwoSidedVec"
 readme = "README.md"
 license = "MIT"
+edition = "2018"
 
 [dependencies]
 serde = { version = "^1.0.27", optional = true }

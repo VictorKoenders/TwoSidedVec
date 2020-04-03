@@ -1,7 +1,4 @@
-#[macro_use]
-extern crate two_sided_vec;
-extern crate serde;
-extern crate serde_test;
+use two_sided_vec::two_sided_vec;
 
 use std::fmt::Debug;
 

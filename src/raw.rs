@@ -28,10 +28,13 @@ impl<T> RawTwoSidedVec<T> {
         let mut heap = Global::default();
         let layout = capacity.layout::<T>();
         unsafe {
-            let raw = heap.alloc(layout)
+            let (ptr, actual_capacity_bytes) = heap.alloc(layout)
                 .unwrap_or_else(|_| handle_alloc_error(layout));
-            let middle = (raw.as_ptr() as *mut T).add(capacity.back);
-            RawTwoSidedVec::from_raw_parts(middle, capacity)
+            let middle = (ptr.as_ptr() as *mut T).add(capacity.back);
+            RawTwoSidedVec::from_raw_parts(
+                middle,
+                capacity.with_actual_capacity(actual_capacity_bytes / mem::size_of::<T>())
+            )
         }
     }
     #[inline]
@@ -67,8 +70,10 @@ impl<T> RawTwoSidedVec<T> {
                 self.capacity.layout::<T>(),
                 requested_capacity.layout::<T>().size()
             ) } {
-                Ok(()) => {
-                    self.capacity = requested_capacity;
+                Ok(actual_capacity_bytes) => {
+                    self.capacity = requested_capacity.with_actual_capacity(
+                        actual_capacity_bytes / mem::size_of::<T>()
+                    );
                     true
                 },
                 Err(_) => false
@@ -140,6 +145,14 @@ impl Capacity {
     #[inline]
     pub fn is_empty(&self) -> bool {
         self.back == 0 && self.front == 0
+    }
+    #[inline]
+    fn with_actual_capacity(&self, actual_capacity: usize) -> Self {
+        assert!(actual_capacity >= self.total());
+        Capacity {
+            back: self.back,
+            front: actual_capacity - self.back
+        }
     }
 }
 impl Add for Capacity {

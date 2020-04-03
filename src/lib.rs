@@ -26,12 +26,12 @@ pub use self::extend::TwoSidedExtend;
 use self::raw::{RawTwoSidedVec, Capacity, CapacityRequest};
 
 /// Internal macro used to count the number of expressions passed to the `two_sided_vec!` macro.
-#[macro_export]
+#[macro_export(local_inner_macros)]
 #[doc(hidden)]
 macro_rules! count_exprs {
     () => (0);
     ($one:expr) => (1);
-    ($first:expr, $($value:expr),*) => (count_exprs!($($value),*) + 1)
+    ($first:expr, $($value:expr),*) => ($crate::count_exprs!($($value),*) + 1)
 }
 /// Creates a `TwoSidedVec` from the specified elements.
 ///
@@ -53,8 +53,8 @@ macro_rules! two_sided_vec {
     ($($element:expr),*) => (two_sided_vec![; $($element),*]);
     ($($back:expr),*; $($front:expr),*) =>  {{
         let mut result = $crate::TwoSidedVec::with_capacity(
-            count_exprs!($($back),*),
-            count_exprs!($($front),*)
+            $crate::count_exprs!($($back),*),
+            $crate::count_exprs!($($front),*)
         );
         $(result.push_back($back);)*
         if !result.back().is_empty() {
