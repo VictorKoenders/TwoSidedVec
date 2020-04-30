@@ -3,7 +3,7 @@ use std::marker::PhantomData;
 use std::ops::{Add};
 use std::mem;
 
-use std::alloc::{handle_alloc_error, AllocRef, Global, Layout};
+use std::alloc::{handle_alloc_error, AllocRef, Global, Layout, AllocInit, ReallocPlacement};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
@@ -28,12 +28,12 @@ impl<T> RawTwoSidedVec<T> {
         let mut heap = Global::default();
         let layout = capacity.layout::<T>();
         unsafe {
-            let (ptr, actual_capacity_bytes) = heap.alloc(layout)
+            let memory = heap.alloc(layout, AllocInit::Uninitialized)
                 .unwrap_or_else(|_| handle_alloc_error(layout));
-            let middle = (ptr.as_ptr() as *mut T).add(capacity.back);
+            let middle = (memory.ptr.as_ptr() as *mut T).add(capacity.back);
             RawTwoSidedVec::from_raw_parts(
                 middle,
-                capacity.with_actual_capacity(actual_capacity_bytes / mem::size_of::<T>())
+                capacity.with_actual_capacity(memory.size / mem::size_of::<T>())
             )
         }
     }
@@ -65,14 +65,17 @@ impl<T> RawTwoSidedVec<T> {
          */
         let mut heap = Global::default();
         if !self.capacity.is_empty() && self.capacity.back >= requested_capacity.back {
-            match unsafe { heap.grow_in_place(
+            match unsafe { heap.grow(
                 NonNull::new_unchecked(self.alloc_start() as *mut u8),
                 self.capacity.layout::<T>(),
-                requested_capacity.layout::<T>().size()
+                requested_capacity.layout::<T>().size(),
+                ReallocPlacement::InPlace,
+                AllocInit::Uninitialized
             ) } {
-                Ok(actual_capacity_bytes) => {
+                Ok(memory) => {
+                    assert_eq!(memory.ptr.as_ptr(), self.alloc_start() as *mut u8);
                     self.capacity = requested_capacity.with_actual_capacity(
-                        actual_capacity_bytes / mem::size_of::<T>()
+                        memory.size / mem::size_of::<T>()
                     );
                     true
                 },
