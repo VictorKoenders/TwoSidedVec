@@ -37,6 +37,11 @@ impl<T> RawTwoSidedVec<T> {
             )
         }
     }
+    /// Create a vector based on an existing pointer and capacity
+    ///
+    /// ## Safety
+    /// Undefined behavior if middle doesn't have enough space for `capacity`
+    /// elements (in either direction) or the memory was allocated incorrectly.
     #[inline]
     pub unsafe fn from_raw_parts(middle: *mut T, capacity: Capacity) -> Self {
         assert_ne!(mem::size_of::<T>(), 0, "Zero sized type!");

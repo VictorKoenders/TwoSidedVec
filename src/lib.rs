@@ -65,6 +65,11 @@ macro_rules! two_sided_vec {
     }}
 }
 
+impl<T> Default for RawTwoSidedVec<T> {
+    fn default() -> Self {
+        RawTwoSidedVec::new()
+    }
+}
 /// A simple 'two sided' vector, that can grow both forwards and backwards.
 ///
 /// The front and the back can be viewed as seperate and independent vectors,
@@ -322,10 +327,19 @@ impl<T> TwoSidedVec<T> {
     pub fn get_mut<I: TwoSidedIndex<T>>(&mut self, index: I) -> Option<&mut I::Output> {
         index.get_mut(self)
     }
+    /// Get a reference to value at the specified index
+    ///
+    /// ## Safety
+    /// Undefined behavior if the index is out of bounds
     #[inline]
     pub unsafe fn get_unchecked<I: TwoSidedIndex<T>>(&self, index: I) -> &I::Output {
         index.get_unchecked(self)
     }
+
+    /// Get a mutable reference to value at the specified index
+    ///
+    /// ## Safety
+    /// Undefined behavior if the index is out of bounds
     #[inline]
     pub unsafe fn get_unchecked_mut<I: TwoSidedIndex<T>>(&mut self, index: I) -> &mut I::Output {
         index.get_unchecked_mut(self)
@@ -480,7 +494,15 @@ unsafe impl<#[may_dangle] T> Drop for TwoSidedVec<T> {
 }
 pub trait TwoSidedIndex<T>: Sized + Debug {
     type Output: ?Sized;
+    /// Use this as an index against the specified vec
+    ///
+    /// ## Safety
+    /// Undefined behavior if the index is out of bounds
     unsafe fn get_unchecked(self, target: &TwoSidedVec<T>) -> &Self::Output;
+    /// Use this as an index against the specified vec
+    ///
+    /// ## Safety
+    /// Undefined behavior if the index is out of bounds
     unsafe fn get_unchecked_mut(self, target: &mut TwoSidedVec<T>) -> &mut Self::Output;
     fn check(&self, target: &TwoSidedVec<T>) -> bool;
     #[inline]
