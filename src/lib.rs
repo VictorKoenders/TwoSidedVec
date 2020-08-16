@@ -3,7 +3,7 @@
     allocator_api, // We need to allocate raw memory
     alloc_layout_extra, // We need to allocate memory
     trusted_len, // Trusted length iterators improve performance
-    specialization, // Used to improve extend performance
+    min_specialization, // Used to improve extend performance
 )]
 #[cfg(feature = "serde")]
 extern crate serde;
