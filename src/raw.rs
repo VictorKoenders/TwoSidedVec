@@ -1,9 +1,9 @@
 use std::ptr::NonNull;
 use std::marker::PhantomData;
-use std::ops::{Add};
+use std::ops::Add;
 use std::mem;
 
-use std::alloc::{handle_alloc_error, AllocRef, Global, Layout};
+use std::alloc::{handle_alloc_error, Allocator, Global, Layout};
 
 pub struct RawTwoSidedVec<T> {
     middle: NonNull<T>,
@@ -25,10 +25,10 @@ impl<T> RawTwoSidedVec<T> {
         if capacity.is_empty() {
             return RawTwoSidedVec::new()
         }
-        let mut heap = Global::default();
+        let heap = Global::default();
         let layout = capacity.layout::<T>();
         unsafe {
-            let memory = heap.alloc(layout)
+            let memory = heap.allocate(layout)
                 .unwrap_or_else(|_| handle_alloc_error(layout));
             let middle = (memory.as_ptr() as *mut T).add(capacity.back);
             RawTwoSidedVec::from_raw_parts(
@@ -84,10 +84,10 @@ unsafe impl<#[may_dangle] T> Drop for RawTwoSidedVec<T> {
     #[inline]
     fn drop(&mut self) {
         if !self.capacity.is_empty() {
-            let mut heap = Global::default();
+            let heap = Global::default();
             unsafe {
                 let layout = self.capacity.layout::<T>();
-                heap.dealloc(
+                heap.deallocate(
                     NonNull::new_unchecked(self.alloc_start() as *mut u8),
                     layout
                 );
