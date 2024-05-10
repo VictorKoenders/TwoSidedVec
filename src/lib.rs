@@ -1,29 +1,17 @@
-#![feature(
-    dropck_eyepatch, // Needed to bypass dropchk
-    allocator_api, // We need to allocate raw memory
-    alloc_layout_extra, // We need to allocate memory
-    trusted_len, // Trusted length iterators improve performance
-    min_specialization, // Used to improve extend performance
-)]
-#[cfg(feature = "serde")]
-extern crate serde;
-
-use std::{slice, ptr, iter};
-use std::fmt::{self, Formatter, Debug};
-use std::ops::{Index, Range, RangeFull, RangeFrom, RangeTo, IndexMut};
+use std::fmt::{self, Debug, Formatter};
 use std::hash::{Hash, Hasher};
+use std::ops::{Index, IndexMut, Range, RangeFrom, RangeFull, RangeTo};
+use std::{iter, ptr, slice};
 
 pub mod raw;
-mod extend;
 #[cfg(feature = "serde")]
 mod serialize;
 /// The prelude of traits and objects which are generally useful.
 pub mod prelude {
-    pub use super::{TwoSidedExtend, TwoSidedVec};
+    pub use super::TwoSidedVec;
 }
 
-pub use self::extend::TwoSidedExtend;
-use self::raw::{RawTwoSidedVec, Capacity, CapacityRequest};
+use self::raw::{Capacity, CapacityRequest, RawTwoSidedVec};
 
 /// Internal macro used to count the number of expressions passed to the `two_sided_vec!` macro.
 #[macro_export(local_inner_macros)]
@@ -92,33 +80,29 @@ pub struct TwoSidedVec<T> {
 impl<T> TwoSidedVec<T> {
     #[inline]
     pub fn new() -> Self {
-        unsafe {
-            TwoSidedVec::from_raw(RawTwoSidedVec::new())
-        }
+        unsafe { TwoSidedVec::from_raw(RawTwoSidedVec::new()) }
     }
     #[inline]
     pub fn with_capacity(back: usize, front: usize) -> Self {
-        unsafe {
-            TwoSidedVec::from_raw(RawTwoSidedVec::with_capacity(Capacity { back, front }))
-        }
+        unsafe { TwoSidedVec::from_raw(RawTwoSidedVec::with_capacity(Capacity { back, front })) }
     }
     #[inline]
     unsafe fn from_raw(memory: RawTwoSidedVec<T>) -> Self {
-        TwoSidedVec { memory, start_index: 0, end_index: 0 }
+        TwoSidedVec {
+            memory,
+            start_index: 0,
+            end_index: 0,
+        }
     }
     /// Take a slice of the front of this queue
     #[inline]
     pub fn front(&self) -> &[T] {
-        unsafe {
-            slice::from_raw_parts(self.middle_ptr(), self.len_front())
-        }
+        unsafe { slice::from_raw_parts(self.middle_ptr(), self.len_front()) }
     }
     /// Take a slice of the back of this queue
     #[inline]
     pub fn back(&self) -> &[T] {
-        unsafe {
-            slice::from_raw_parts(self.start_ptr(), self.len_back())
-        }
+        unsafe { slice::from_raw_parts(self.start_ptr(), self.len_back()) }
     }
     /// Take a mutable slice of the front of this queue
     #[inline]
@@ -141,7 +125,7 @@ impl<T> TwoSidedVec<T> {
         unsafe {
             (
                 slice::from_raw_parts_mut(self.start_ptr(), self.len_back()),
-                slice::from_raw_parts_mut(self.middle_ptr(), self.len_front())
+                slice::from_raw_parts_mut(self.middle_ptr(), self.len_front()),
             )
         }
     }
@@ -157,9 +141,7 @@ impl<T> TwoSidedVec<T> {
     pub fn pop_front(&mut self) -> Option<T> {
         if self.end_index > 0 {
             self.end_index -= 1;
-            unsafe {
-                Some(ptr::read(self.end_ptr()))
-            }
+            unsafe { Some(ptr::read(self.end_ptr())) }
         } else {
             None
         }
@@ -168,9 +150,7 @@ impl<T> TwoSidedVec<T> {
     pub fn pop_back(&mut self) -> Option<T> {
         if self.start_index < 0 {
             self.start_index += 1;
-            unsafe {
-                Some(ptr::read(self.middle_ptr().offset(self.start_index - 1)))
-            }
+            unsafe { Some(ptr::read(self.middle_ptr().offset(self.start_index - 1))) }
         } else {
             None
         }
@@ -188,35 +168,23 @@ impl<T> TwoSidedVec<T> {
             self.start_index -= 1;
         }
     }
-    fn default_extend_back<I: Iterator<Item=T>>(&mut self, iter: I) {
-        if let Some(hint) = iter.size_hint().1 { self.reserve_back(hint) };
+    fn default_extend_back<I: Iterator<Item = T>>(&mut self, iter: I) {
+        if let Some(hint) = iter.size_hint().1 {
+            self.reserve_back(hint)
+        };
         for value in iter {
             self.push_back(value);
         }
     }
-    fn default_extend_front<I: Iterator<Item=T>>(&mut self, iter: I) {
-        if let Some(hint) = iter.size_hint().1 { self.reserve_front(hint) };
+    fn default_extend_front<I: Iterator<Item = T>>(&mut self, iter: I) {
+        if let Some(hint) = iter.size_hint().1 {
+            self.reserve_front(hint)
+        };
         for value in iter {
             self.push_front(value);
         }
     }
-    unsafe fn raw_extend_back(&mut self, mut target: *const T, len: usize) {
-        self.reserve_back(len);
-        let target_end = target.add(len);
-        let mut start_ptr = self.start_ptr();
-        while target < target_end {
-            start_ptr = start_ptr.sub(1);
-            start_ptr.copy_from_nonoverlapping(target, 1);
-            target = target.add(1);
-        }
-        self.start_index -= len as isize;
-        debug_assert_eq!(self.start_ptr(), start_ptr);
-    }
-    unsafe fn raw_extend_front(&mut self, target: *const T, len: usize) {
-        self.reserve_front(len);
-        self.end_ptr().copy_from_nonoverlapping(target, len);
-        self.end_index += len as isize;
-    }
+
     #[inline]
     pub fn reserve_back(&mut self, amount: usize) {
         debug_assert!(self.check_sanity());
@@ -237,11 +205,15 @@ impl<T> TwoSidedVec<T> {
             self.memory.capacity(), amount, self.end_index, self.start_index, self.len()
         );
     }
-    #[cold] #[inline(never)]
+    #[cold]
+    #[inline(never)]
     fn grow(&mut self, front: usize, back: usize) {
         let request = CapacityRequest {
-            used: Capacity { back: self.len_back(), front: self.len_front() },
-            needed: Capacity { front, back }
+            used: Capacity {
+                back: self.len_back(),
+                front: self.len_front(),
+            },
+            needed: Capacity { front, back },
         };
         self.memory.reserve(request);
     }
@@ -347,9 +319,7 @@ impl<T> TwoSidedVec<T> {
     /// Give a raw pointer to the start of the elements
     #[inline]
     pub fn start_ptr(&self) -> *mut T {
-        unsafe {
-            self.middle_ptr().offset(self.start_index)
-        }
+        unsafe { self.middle_ptr().offset(self.start_index) }
     }
     /// Give a raw pointer to the middle of the elements
     #[inline]
@@ -358,9 +328,7 @@ impl<T> TwoSidedVec<T> {
     }
     #[inline]
     pub fn end_ptr(&self) -> *mut T {
-        unsafe {
-            self.middle_ptr().offset(self.end_index)
-        }
+        unsafe { self.middle_ptr().offset(self.end_index) }
     }
     #[inline]
     pub fn split_at(&self, index: isize) -> (&[T], &[T]) {
@@ -374,7 +342,7 @@ impl<T> TwoSidedVec<T> {
         true
     }
     pub fn clear(&mut self) {
-        while let Some(value) = self.pop_back()  {
+        while let Some(value) = self.pop_back() {
             drop(value)
         }
         while let Some(value) = self.pop_front() {
@@ -441,32 +409,43 @@ impl<T> TwoSidedVec<T> {
     pub fn retain_front<F: FnMut(isize, &mut T) -> bool>(&mut self, mut pred: F) {
         self.drain_filter_front(|index, element| !pred(index, element));
     }
-    pub fn drain_filter_back<F: FnMut(isize, &mut T) -> bool>(&mut self, pred: F) -> DrainFilterBack<T, F> {
+    pub fn drain_filter_back<F: FnMut(isize, &mut T) -> bool>(
+        &mut self,
+        pred: F,
+    ) -> DrainFilterBack<T, F> {
         let old_len = self.len_back();
         self.back_mut().reverse();
         // Guard against us getting leaked (leak amplification)
         self.start_index = 0;
         DrainFilterBack {
-            old_len, index: 0, del: 0, vec: self, pred
+            old_len,
+            index: 0,
+            del: 0,
+            vec: self,
+            pred,
         }
     }
-    pub fn drain_filter_front<F: FnMut(isize, &mut T) -> bool>(&mut self, pred: F) -> DrainFilterFront<T, F> {
+    pub fn drain_filter_front<F: FnMut(isize, &mut T) -> bool>(
+        &mut self,
+        pred: F,
+    ) -> DrainFilterFront<T, F> {
         let old_len = self.end_index as usize;
         // Guard against us getting leaked (leak amplification)
         self.end_index = 0;
         DrainFilterFront {
-            old_len, index: 0, del: 0, vec: self, pred
+            old_len,
+            index: 0,
+            del: 0,
+            vec: self,
+            pred,
         }
     }
 }
 impl<T: Clone> Clone for TwoSidedVec<T> {
     fn clone(&self) -> Self {
-        let mut result = TwoSidedVec::with_capacity(
-            self.len_back(),
-            self.len_front()
-        );
-        result.extend_back(self.back().iter().rev().cloned());
-        result.extend_front(self.front().iter().cloned());
+        let mut result = TwoSidedVec::with_capacity(self.len_back(), self.len_front());
+        result.default_extend_back(self.back().iter().rev().cloned());
+        result.default_extend_front(self.front().iter().cloned());
         result
     }
 }
@@ -484,14 +463,7 @@ impl<T: Debug> Debug for TwoSidedVec<T> {
             .finish()
     }
 }
-unsafe impl<#[may_dangle] T> Drop for TwoSidedVec<T> {
-    fn drop(&mut self) {
-        unsafe {
-            // use drop for owned slice `[T]` just like vec
-            ptr::drop_in_place(&mut self[..])
-        }
-    }
-}
+
 pub trait TwoSidedIndex<T>: Sized + Debug {
     type Output: ?Sized;
     /// Use this as an index against the specified vec
@@ -582,7 +554,7 @@ impl<T> TwoSidedIndex<T> for Range<isize> {
     unsafe fn get_unchecked(self, target: &TwoSidedVec<T>) -> &Self::Output {
         slice::from_raw_parts(
             target.middle_ptr().offset(self.start),
-            (self.end - self.start) as usize
+            (self.end - self.start) as usize,
         )
     }
 
@@ -590,15 +562,13 @@ impl<T> TwoSidedIndex<T> for Range<isize> {
     unsafe fn get_unchecked_mut(self, target: &mut TwoSidedVec<T>) -> &mut Self::Output {
         slice::from_raw_parts_mut(
             target.middle_ptr().offset(self.start),
-            (self.end - self.start) as usize
+            (self.end - self.start) as usize,
         )
     }
 
     #[inline]
     fn check(&self, target: &TwoSidedVec<T>) -> bool {
-        self.start >= target.start_index
-            && self.start <= self.end
-            && self.end <= target.end_index
+        self.start >= target.start_index && self.start <= self.end && self.end <= target.end_index
     }
 }
 
@@ -607,18 +577,12 @@ impl<T> TwoSidedIndex<T> for RangeFull {
 
     #[inline]
     unsafe fn get_unchecked(self, target: &TwoSidedVec<T>) -> &Self::Output {
-        slice::from_raw_parts(
-            target.middle_ptr().offset(target.start_index),
-            target.len()
-        )
+        slice::from_raw_parts(target.middle_ptr().offset(target.start_index), target.len())
     }
 
     #[inline]
     unsafe fn get_unchecked_mut(self, target: &mut TwoSidedVec<T>) -> &mut Self::Output {
-        slice::from_raw_parts_mut(
-            target.middle_ptr().offset(target.start_index),
-            target.len()
-        )
+        slice::from_raw_parts_mut(target.middle_ptr().offset(target.start_index), target.len())
     }
 
     #[inline]
@@ -633,7 +597,7 @@ impl<T> TwoSidedIndex<T> for RangeFrom<isize> {
     unsafe fn get_unchecked(self, target: &TwoSidedVec<T>) -> &Self::Output {
         slice::from_raw_parts(
             target.middle_ptr().offset(self.start),
-            (target.end_index - self.start) as usize
+            (target.end_index - self.start) as usize,
         )
     }
 
@@ -641,7 +605,7 @@ impl<T> TwoSidedIndex<T> for RangeFrom<isize> {
     unsafe fn get_unchecked_mut(self, target: &mut TwoSidedVec<T>) -> &mut Self::Output {
         slice::from_raw_parts_mut(
             target.middle_ptr().offset(self.start),
-            (target.end_index - self.start) as usize
+            (target.end_index - self.start) as usize,
         )
     }
 
@@ -657,7 +621,7 @@ impl<T> TwoSidedIndex<T> for RangeTo<isize> {
     unsafe fn get_unchecked(self, target: &TwoSidedVec<T>) -> &Self::Output {
         slice::from_raw_parts(
             target.middle_ptr().offset(target.start_index),
-            (self.end - target.start_index) as usize
+            (self.end - target.start_index) as usize,
         )
     }
 
@@ -665,7 +629,7 @@ impl<T> TwoSidedIndex<T> for RangeTo<isize> {
     unsafe fn get_unchecked_mut(self, target: &mut TwoSidedVec<T>) -> &mut Self::Output {
         slice::from_raw_parts_mut(
             target.middle_ptr().offset(target.start_index),
-            (self.end - target.start_index) as usize
+            (self.end - target.start_index) as usize,
         )
     }
 
@@ -675,20 +639,26 @@ impl<T> TwoSidedIndex<T> for RangeTo<isize> {
     }
 }
 
-
 pub struct SignedEnumerate<I> {
     index: isize,
-    handle: I
+    handle: I,
 }
 impl<I: Iterator> SignedEnumerate<I> {
     #[inline]
     pub fn new(start: isize, handle: I) -> Self {
-        debug_assert!((handle.size_hint().1.unwrap_or(0) as isize)
-                          .checked_add(start).is_some(), "Overflow!");
-        SignedEnumerate { index: start, handle }
+        debug_assert!(
+            (handle.size_hint().1.unwrap_or(0) as isize)
+                .checked_add(start)
+                .is_some(),
+            "Overflow!"
+        );
+        SignedEnumerate {
+            index: start,
+            handle,
+        }
     }
 }
-impl<T, I: Iterator<Item=T>> Iterator for SignedEnumerate<I> {
+impl<T, I: Iterator<Item = T>> Iterator for SignedEnumerate<I> {
     type Item = (isize, T);
 
     #[inline]
@@ -708,7 +678,9 @@ impl<T, I: Iterator<Item=T>> Iterator for SignedEnumerate<I> {
     }
 }
 impl<I> iter::DoubleEndedIterator for SignedEnumerate<I>
-    where I: iter::DoubleEndedIterator + iter::ExactSizeIterator {
+where
+    I: iter::DoubleEndedIterator + iter::ExactSizeIterator,
+{
     #[inline]
     fn next_back(&mut self) -> Option<Self::Item> {
         self.handle.next_back().map(|value| {
@@ -721,7 +693,6 @@ impl<I> iter::DoubleEndedIterator for SignedEnumerate<I>
 }
 impl<I: iter::FusedIterator> iter::FusedIterator for SignedEnumerate<I> {}
 impl<I: iter::ExactSizeIterator> iter::ExactSizeIterator for SignedEnumerate<I> {}
-unsafe impl<I: iter::TrustedLen> iter::TrustedLen for SignedEnumerate<I> {}
 
 impl<T> From<Vec<T>> for TwoSidedVec<T> {
     #[inline]
@@ -730,12 +701,17 @@ impl<T> From<Vec<T>> for TwoSidedVec<T> {
         let capacity = original.capacity();
         let len = original.len();
         TwoSidedVec {
-            memory: unsafe { RawTwoSidedVec::from_raw_parts(
-                ptr,
-                Capacity { back: 0, front: capacity }
-            ) },
+            memory: unsafe {
+                RawTwoSidedVec::from_raw_parts(
+                    ptr,
+                    Capacity {
+                        back: 0,
+                        front: capacity,
+                    },
+                )
+            },
             end_index: len as isize,
-            start_index: 0
+            start_index: 0,
         }
     }
 }
@@ -744,12 +720,12 @@ impl<T: PartialEq<U>, U> PartialEq<TwoSidedVec<U>> for TwoSidedVec<T> {
         if self.start() == other.start() && self.end() == other.end() {
             for (first, second) in self.back().iter().zip(other.back()) {
                 if first != second {
-                    return false
+                    return false;
                 }
             }
             for (first, second) in self.front().iter().zip(other.front()) {
                 if first != second {
-                    return false
+                    return false;
                 }
             }
             true
@@ -777,7 +753,7 @@ pub struct DrainFilterBack<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> {
     index: usize,
     del: usize,
     old_len: usize,
-    pred: F
+    pred: F,
 }
 impl<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> Iterator for DrainFilterBack<'a, T, F> {
     type Item = T;
@@ -789,7 +765,7 @@ impl<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> Iterator for DrainFilterBack<'a
                 self.index += 1;
                 let v = slice::from_raw_parts_mut(
                     self.vec.middle_ptr().sub(self.old_len),
-                    self.old_len
+                    self.old_len,
                 );
                 let actual_index = -((i + 1) as isize);
                 if (self.pred)(actual_index, &mut v[i]) {
@@ -822,7 +798,7 @@ impl<'a, T, F: FnMut(isize, &mut T) -> bool> Drop for DrainFilterBack<'a, T, F> 
             ptr::copy_nonoverlapping(
                 self.vec.middle_ptr().sub(self.old_len),
                 self.vec.middle_ptr().sub(target_len),
-                target_len
+                target_len,
             );
         }
         debug_assert!(target_len <= isize::max_value() as usize);
@@ -832,14 +808,12 @@ impl<'a, T, F: FnMut(isize, &mut T) -> bool> Drop for DrainFilterBack<'a, T, F> 
     }
 }
 
-
-
 pub struct DrainFilterFront<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> {
     vec: &'a mut TwoSidedVec<T>,
     index: usize,
     del: usize,
     old_len: usize,
-    pred: F
+    pred: F,
 }
 impl<'a, T: 'a, F: FnMut(isize, &mut T) -> bool> Iterator for DrainFilterFront<'a, T, F> {
     type Item = T;
@@ -876,6 +850,6 @@ impl<'a, T, F: FnMut(isize, &mut T) -> bool> Drop for DrainFilterFront<'a, T, F>
         for _ in self.by_ref() {}
         let target_len = (self.old_len - self.del) as isize;
         assert!(target_len >= 0);
-        self.vec.end_index = target_len as isize;
+        self.vec.end_index = target_len;
     }
 }

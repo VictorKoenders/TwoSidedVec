@@ -1,9 +1,9 @@
-use two_sided_vec::two_sided_vec;
+#[cfg(feature = "serde")]
+use serde_test::Token;
 
 use std::fmt::Debug;
-
-use serde_test::{Token};
-use two_sided_vec::{TwoSidedVec, TwoSidedExtend};
+use two_sided_vec::two_sided_vec;
+use two_sided_vec::TwoSidedVec;
 
 #[test]
 fn test_push_front() {
@@ -33,7 +33,7 @@ fn test_retain() {
 #[test]
 fn test_retain_text() {
     let mut vec = two_sided_vec!["bob", "food", "text loves"; "fourteen", "why"];
-    vec.retain(|_, x| !x.contains("f") && !x.contains(" "));
+    vec.retain(|_, x| !x.contains('f') && !x.contains(' '));
     assert_eq!(vec, two_sided_vec!["bob"; "why"]);
 }
 #[test]
@@ -60,11 +60,7 @@ fn test_pop() {
     for &i in &expected_front {
         result.push_front(i);
     }
-    assert_expected(
-        &result,
-        expected_back.clone(),
-        expected_front.clone()
-    );
+    assert_expected(&result, expected_back.clone(), expected_front.clone());
     while let Some(expected) = expected_back.pop() {
         assert_eq!(expected, result.pop_back().unwrap());
     }
@@ -75,86 +71,34 @@ fn test_pop() {
     assert_eq!(result.len_front(), expected_front.len());
     assert!(result.is_empty());
 }
+#[cfg(feature = "serde")]
 #[test]
 fn test_serde() {
     let values = two_sided_vec![1, 2, 3; 7, 8, 9, 10];
-    ::serde_test::assert_tokens(&values, &[
-        Token::Struct {
-            name: "TwoSidedVec",
-            len: 2
-        },
-        Token::Str("back"),
-        Token::Seq { len: Some(3) },
-        Token::I32(3),
-        Token::I32(2),
-        Token::I32(1),
-        Token::SeqEnd,
-        Token::Str("front"),
-        Token::Seq { len: Some(4) },
-        Token::I32(7),
-        Token::I32(8),
-        Token::I32(9),
-        Token::I32(10),
-        Token::SeqEnd,
-        Token::StructEnd
-    ])
+    ::serde_test::assert_tokens(
+        &values,
+        &[
+            Token::Struct {
+                name: "TwoSidedVec",
+                len: 2,
+            },
+            Token::Str("back"),
+            Token::Seq { len: Some(3) },
+            Token::I32(3),
+            Token::I32(2),
+            Token::I32(1),
+            Token::SeqEnd,
+            Token::Str("front"),
+            Token::Seq { len: Some(4) },
+            Token::I32(7),
+            Token::I32(8),
+            Token::I32(9),
+            Token::I32(10),
+            Token::SeqEnd,
+            Token::StructEnd,
+        ],
+    )
 }
-#[test]
-fn test_extend_ref_slice() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back(&[3, 2, 1]);
-    result.extend_front(&[4, 5, 6]);
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6])
-}
-
-#[test]
-fn test_extend_ref_trusted_len() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back([3, 2, 1].iter().map(|i| i));
-    result.extend_front([4, 5, 6].iter().map(|i| i));
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6])
-}
-
-#[test]
-fn test_extend_ref_default() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back([3, 2, 1].iter().map(|i| i).filter(|i| **i < 32));
-    result.extend_front([4, 5, 6].iter().map(|i| i).filter(|i| **i < 32));
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6])
-}
-
-
-#[test]
-fn text_extend_vec() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back(vec![3, 2, 1]);
-    result.extend_front(vec![4, 5, 6]);
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6]);
-}
-
-#[test]
-fn text_extend_trusted_len() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back(vec![3, 2, 1].into_iter().map(|i| i));
-    result.extend_front(vec![4, 5, 6].into_iter().map(|i| i));
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6])
-}
-
-
-#[test]
-fn text_extend_default() {
-    let mut result = TwoSidedVec::<u32>::new();
-    result.extend_back(vec![3, 2, 1].into_iter().filter(|i| *i < 32));
-    result.extend_front(vec![4, 5, 6].into_iter().filter(|i| *i < 32));
-    assert_eq!(result.back(), &[1, 2, 3]);
-    assert_eq!(result.front(), &[4, 5, 6])
-}
-
 #[test]
 fn truncate_front() {
     let mut result = two_sided_vec![1, 2, 3; 4, 5, 6, 7];
@@ -198,7 +142,7 @@ fn truncate_back() {
 fn assert_expected<T: Debug + Eq + Clone>(
     target: &TwoSidedVec<T>,
     mut expected_back: Vec<T>,
-    expected_front: Vec<T>
+    expected_front: Vec<T>,
 ) {
     expected_back.reverse();
     let expected_start = -(expected_back.len() as isize);
@@ -212,9 +156,10 @@ fn assert_expected<T: Debug + Eq + Clone>(
         assert_eq!(&target[-(index as isize) - 1], expected);
     }
     for (index, expected) in expected_front.iter().enumerate() {
-        assert_eq!(&target[(index as isize)], expected);
+        assert_eq!(&target[index as isize], expected);
     }
-    let entire_expected = expected_back.iter()
+    let entire_expected = expected_back
+        .iter()
         .chain(expected_front.iter())
         .cloned()
         .collect::<Vec<T>>();

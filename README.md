@@ -1,5 +1,10 @@
-TwoSidedVec ![crates.io](https://img.shields.io/crates/v/two-sided-vec.svg)
+TwoSidedVec
 ===========
+
+*Forked from [https://github.com/DuckLogic/TwoSidedVec](https://github.com/DuckLogic/TwoSidedVec/fork)*
+
+
+
 A vector that can grow both forwards and backwards.
 
 It's effectively equivelant two seperate `back` and `front` vectors,
